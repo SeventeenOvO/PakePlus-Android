@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>油价查询</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+body{
+  background: linear-gradient(135deg, #eef4ff 0%, #f0f7ff 100%);
+  padding:20px 16px;
+  color:#1f2937;
+  min-height:100vh;
+}
+.wrap{max-width:640px;margin:0 auto;}
+.tab{
+  display:flex;gap:8px;margin-bottom:20px;
+}
+.tab-item{
+  flex:1;text-align:center;padding:14px 0;border-radius:14px;background:#ffffff;
+  font-weight:500;color:#6b7280;cursor:pointer;transition:0.25s;
+  box-shadow:0 2px 10px rgba(0,0,0,0.06);
+}
+.tab-item.active{
+  background:#2563eb;color:#fff;box-shadow:0 4px 14px rgba(37,99,235,0.25);
+}
+.page{display:none;}
+.page.active{display:block;}
+.card{
+  background:#ffffff;border-radius:20px;padding:24px;margin-bottom:18px;
+  box-shadow:0 4px 16px rgba(0,0,0,0.07);
+}
+.card-title{
+  font-size:18px;font-weight:600;margin-bottom:18px;color:#111827;
+  display:flex;align-items:center;gap:8px;
+}
+.oil-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.oil-item{
+  background:#f8fafc;border-radius:14px;padding:16px;text-align:center;
+}
+.oil-name{font-size:14px;color:#64748b;margin-bottom:6px;}
+.oil-price{font-size:22px;font-weight:700;color:#1e293b;}
+.info-row{margin:16px 0;}
+.info-label{font-size:14px;color:#64748b;margin-bottom:4px;}
+.info-val{font-size:17px;font-weight:500;}
+.up{color:#ef4444;}
+.down{color:#16a34a;}
+.flat{color:#475569;}
+.countdown-wrap{
+  margin-top:12px;
+  padding:12px 16px;
+  background:#eff6ff;
+  border-radius:12px;
+  text-align:center;
+}
+.countdown{
+  color:#2563eb;
+  font-size:18px;
+  font-weight:600;
+}
+.btn-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;}
+.btn{
+  flex:1;padding:14px;border:none;border-radius:14px;font-size:15px;font-weight:500;cursor:pointer;transition:0.2s;
+}
+.btn-primary{background:#2563eb;color:#fff;}
+.btn-primary:active{background:#1d4ed8;}
+.btn-secondary{background:#f1f5f9;color:#334155;}
+.btn-secondary:active{background:#e2e8f0;}
+.select-box{
+  width:100%;padding:14px;border:1px solid #e2e8f0;border-radius:14px;
+  background:#f8fafc;font-size:16px;color:#1f2937;outline:none;
+}
+.empty{text-align:center;padding:40px 0;color:#94a3b8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tab">
+    <div class="tab-item active" data-page="home">油价</div>
+    <div class="tab-item" data-page="setting">设置</div>
+  </div>
+
+  <!-- 首页 -->
+  <div id="home" class="page active">
+    <div class="card">
+      <div class="card-title">⛽ <span id="provShow">河北</span>油价</div>
+      <div class="oil-grid">
+        <div class="oil-item">
+          <div class="oil-name">92#汽油</div>
+          <div class="oil-price" id="p92">--</div>
+        </div>
+        <div class="oil-item">
+          <div class="oil-name">95#汽油</div>
+          <div class="oil-price" id="p95">--</div>
+        </div>
+        <div class="oil-item">
+          <div class="oil-name">98#汽油</div>
+          <div class="oil-price" id="p98">--</div>
+        </div>
+        <div class="oil-item">
+          <div class="oil-name">0#柴油</div>
+          <div class="oil-price" id="p0">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⏰ 调价日期</div>
+      <div class="info-row">
+        <div class="info-label">下一轮调价时间</div>
+        <div class="info-val" id="nextTime">2026年11月12日 24:00</div>
+      </div>
+      <div class="countdown-wrap">
+        <div class="countdown" id="countdownText">--</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 调价结果</div>
+      <div class="info-row">
+        <div class="info-val" id="lastChange">--</div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="fetchOil()">刷新油价</button>
+    </div>
+  </div>
+
+  <!-- 设置页 -->
+  <div id="setting" class="page">
+    <div class="card">
+      <div class="card-title">📍 省份选择</div>
+      <select id="provSel" class="select-box"></select>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveSetting()">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== 你的ShowAPI密钥 ==========
+const APP_KEY = "7e7774C4d29F43028Af54D7210120951";
+const API_PRICE = "https://route.showapi.com/138-46"; // 当前油价
+const API_TREND = "https://route.showapi.com/138-49"; // 上一轮涨跌
+
+// 固定调价窗口
+const NEXT_CHANGE_DATE = "2026-11-12 24:00:00";
+
+const provList = ["北京","天津","河北","山西","内蒙古","辽宁","吉林","黑龙江","上海","江苏","浙江","安徽","福建","江西","山东","河南","湖北","湖南","广东","广西","海南","重庆","四川","贵州","云南","西藏","陕西","甘肃","青海","宁夏","新疆"];
+let setting = JSON.parse(localStorage.getItem("oilSetting")) || {prov:"河北"};
+
+document.querySelectorAll(".tab-item").forEach(tab=>{
+  tab.onclick=()=>{
+    document.querySelectorAll(".tab-item").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById(tab.dataset.page).classList.add("active");
+  }
+})
+
+function initProv(){
+  const sel = document.getElementById("provSel");
+  sel.innerHTML = "";
+  provList.forEach(p=>{
+    const opt = document.createElement("option");
+    opt.value = p; opt.innerText=p;
+    if(p === setting.prov) opt.selected=true;
+    sel.appendChild(opt);
+  })
+  document.getElementById("provShow").innerText = setting.prov;
+}
+
+function saveSetting(){
+  setting.prov = document.getElementById("provSel").value;
+  localStorage.setItem("oilSetting",JSON.stringify(setting));
+  document.getElementById("provShow").innerText = setting.prov;
+  alert("保存成功");
+  fetchOil();
+}
+
+// 倒计时
+function calcCountdown(){
+  const target = new Date(NEXT_CHANGE_DATE);
+  const now = new Date();
+  const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
+  if(diff > 0) return `距离调价还有 ${diff} 天`;
+  else if(diff === 0) return "今日调价";
+  else return "调价已结束";
+}
+
+async function fetchOil(){
+  const p = setting.prov;
+  try{
+    // 1、当前油价
+    const priceRes = await fetch(`${API_PRICE}?appKey=${APP_KEY}&prov=${encodeURIComponent(p)}`);
+    const priceJson = await priceRes.json();
+    if(priceJson.showapi_res_code !== 0) throw new Error("油价接口："+(priceJson.showapi_res_error || "失败"));
+    const priceData = priceJson.showapi_res_body.list[0];
+    document.getElementById("p92").innerText = priceData.p92 ?? "--";
+    document.getElementById("p95").innerText = priceData.p95 ?? "--";
+    document.getElementById("p98").innerText = priceData.p98 ?? "--";
+    document.getElementById("p0").innerText = priceData.p0 ?? "--";
+
+    // 2、上一轮调价结果
+    const trendRes = await fetch(`${API_TREND}?appKey=${APP_KEY}&prov=${encodeURIComponent(p)}`);
+    const trendJson = await trendRes.json();
+    let trendText = "暂无数据";
+    const el = document.getElementById("lastChange");
+    if(trendJson.showapi_res_code === 0){
+      const tb = trendJson.showapi_res_body;
+      const p92obj = tb.p92 || {};
+      const ch = p92obj.change || "";
+      if(ch){
+        trendText = (ch>0?"上调":"下调") + Math.abs(ch) + "元/升";
+      }
+    }
+    el.innerText = trendText;
+    el.className = "info-val flat";
+    if(trendText.includes("上调")) el.classList.add("up");
+    else if(trendText.includes("下调")) el.classList.add("down");
+
+    document.getElementById("countdownText").innerText = calcCountdown();
+  }catch(e){
+    alert("加载失败："+e.message);
+  }
+}
+
+initProv();
+fetchOil();
+</script>
+</body>
+</html>
